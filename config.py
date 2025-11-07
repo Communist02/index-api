@@ -1,0 +1,7 @@
+minio_url = 'localhost:9000'
+open_search_host = 'elastic-1.eco.dvo.ru'
+open_search_port = 9200
+open_search_files_index = 'collections-files'
+access_key = 'admin'
+secret_key = 'password'
+debug_mode = True
