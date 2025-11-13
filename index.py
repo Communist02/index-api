@@ -16,6 +16,10 @@ class IndexManager():
     def __init__(self, endpoint_minio: str = config.minio_url):
         self.endpoint_minio = endpoint_minio
 
+    async def delete_files(self, collection_id: int, collection_name: str, files: list[str]):
+        for path in files:
+            await opensearch.search_and_delete_files(path, collection_id, collection_name)
+
     async def get_info(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
         auth = get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
@@ -42,6 +46,7 @@ class IndexManager():
                 object_name = obj.object_name
                 if not object_name.endswith('NODATA') and not obj.is_dir:
                     file = {
+                        'collection_id': collection_id,
                         'name': obj.object_name[obj.object_name.rfind('/', 0, -1 if obj.is_dir else -2) + 1:],
                         'isDirectory': obj.is_dir,
                         'path': f'/{object_name}',
@@ -53,11 +58,12 @@ class IndexManager():
 
             for file in result:
                 file_metadata = {
-                    "path": file['path'],
-                    "name": file['name'],
-                    "size": file.get('size', 0),
-                    "format": file['name'].split('.')[-1],
-                    "last_modified": file.get('last_modified', file.get('updateAt', datetime.now(UTC).timestamp()))
+                    'collection_id': collection_id,
+                    'path': file['path'],
+                    'name': file['name'],
+                    'size': file.get('size', 0),
+                    'format': file['name'].split('.')[-1],
+                    'last_modified': file.get('last_modified', file.get('updateAt', datetime.now(UTC).timestamp()))
                 }
 
                 document = await opensearch.get_document(

@@ -38,6 +38,32 @@ class OpenSearchManager:
             id=doc_id,
         )
 
+    async def search_and_delete_files(self, path: str, collection_id: int, collection_name: str, index_name: str = config.open_search_files_index):
+        path = path.strip('/')
+        # path = path.replace('/', '\/')
+        print(f'/{path}')
+        query = {
+            'query': {
+                'bool': {
+                    'must': [
+                        {'term': {'collection_id': collection_id}},
+                        {'bool': {
+                            'should': [
+                                {'term': {'path.keyword': f'/{path}'}},
+                                {'prefix': {'path.keyword': f'/{path}/'}}
+                            ]
+                        }}
+                    ]
+                }
+            }
+        }
+
+        response = await self.client.delete_by_query(
+            body=query,
+            index=index_name,
+        )
+        print(response)
+
     async def get_document(self, doc_id: int | str, index_name: str = config.open_search_files_index) -> dict | None:
         try:
             response = await self.client.get(

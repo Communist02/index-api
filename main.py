@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-gdal = IndexManager()
+index = IndexManager()
 
 
 class indexingRequest(BaseModel):
@@ -27,9 +27,21 @@ class indexingRequest(BaseModel):
     encryption_key: str
 
 
+class DeleteRequest(BaseModel):
+    collection_id: int
+    collection_name: str
+    files: list[str]
+
+
 @app.post("/indexing_collection")
-async def login(request: indexingRequest):
+async def indexing_collection(request: indexingRequest):
     encryption_key = base64.urlsafe_b64decode(request.encryption_key.encode())
     encryption_key = SseCustomerKey(encryption_key)
-    await gdal.get_info(request.collection_id, request.collection_name,
+    await index.get_info(request.collection_id, request.collection_name,
                         jwt_token=request.jwt_token, encryption_key=encryption_key)
+
+
+@app.post("/delete_files")
+async def delete_files(request: DeleteRequest):
+    await index.delete_files(request.collection_id, request.collection_name, request.files)
+
