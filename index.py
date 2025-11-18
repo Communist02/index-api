@@ -3,7 +3,7 @@ from datetime import UTC, datetime
 from fastapi import HTTPException
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
-from osgeo import gdal
+from osgeo import gdal, osr
 import config
 from get_token import get_sts_token
 from opensearch import OpenSearchManager
@@ -21,7 +21,7 @@ class IndexManager():
             await opensearch.search_and_delete_files(path, collection_id, collection_name)
 
     async def get_info(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
-        auth = get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
+        auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
                        auth['session_token'], secure=True, cert_check=not config.debug_mode)
 
@@ -119,22 +119,181 @@ class IndexManager():
                     }
                 )
 
-    async def extract_metadata(self, dataset: gdal.Dataset, file_metadata: str):
+    async def extract_metadata(self, dataset: gdal.Dataset, file_metadata: dict):
         geotransform = dataset.GetGeoTransform()
-        metadata = dataset.GetMetadata()
+        projection = dataset.GetProjection()
 
+        # --- Projection / Spatial Reference ---
+        srs = None
+        epsg = None
+        pretty_wkt = None
+        proj4 = None
+        is_projected = None
+        is_geographic = None
+        authority = None
+
+        if projection:
+            try:
+                srs = osr.SpatialReference(wkt=projection)
+                pretty_wkt = srs.ExportToPrettyWkt()
+                proj4 = srs.ExportToProj4()
+                is_projected = srs.IsProjected()
+                is_geographic = srs.IsGeographic()
+                authority = srs.GetAuthorityCode(None)
+
+                # EPSG retrieval: try AUTHORITY:1, fallback to autoIdentifyEPSG()
+                epsg = srs.GetAttrValue("AUTHORITY", 1)
+
+                if not epsg:
+                    try:
+                        srs.AutoIdentifyEPSG()
+                        epsg = srs.GetAuthorityCode(None)
+                    except:
+                        pass
+
+            except Exception:
+                pass
+
+        # --- Extent / Bounding Box ---
+        if geotransform:
+            minx = geotransform[0]
+            maxy = geotransform[3]
+            maxx = minx + geotransform[1] * dataset.RasterXSize
+            miny = maxy + geotransform[5] * dataset.RasterYSize
+
+            extent = {"minx": minx, "miny": miny, "maxx": maxx, "maxy": maxy}
+            bbox = [minx, miny, maxx, maxy]
+        else:
+            extent = None
+            bbox = None
+
+        # --- Specialized metadata domains ---
+        image_structure = dataset.GetMetadata("IMAGE_STRUCTURE")
+        rpc_metadata = dataset.GetMetadata("RPC")
+        geolocation = dataset.GetMetadata("GEOLOCATION")
+        exif = dataset.GetMetadata("EXIF")
+        subdatasets = dataset.GetSubDatasets()
+
+        # --- COG heuristic ---
+        is_cog = (
+            image_structure is not None
+            and image_structure.get("LAYOUT") == "IFDS"
+            and image_structure.get("TILED") == "YES"
+            and "COMPRESSION" in image_structure
+        )
+
+        # --- Bands ---
+        bands = []
+        for idx in range(1, dataset.RasterCount + 1):
+            band = dataset.GetRasterBand(idx)
+
+            try:
+                block_size = band.GetBlockSize()
+            except:
+                block_size = None
+
+            try:
+                color_interp = gdal.GetColorInterpretationName(
+                    band.GetColorInterpretation()
+                )
+            except:
+                color_interp = None
+
+            try:
+                nodata = band.GetNoDataValue()
+            except:
+                nodata = None
+
+            try:
+                datatype = gdal.GetDataTypeName(band.DataType)
+            except:
+                datatype = None
+
+            # Statistics
+            try:
+                min_val, max_val, mean_val, std_val = band.GetStatistics(0, 1)
+                stats = {
+                    "min": min_val,
+                    "max": max_val,
+                    "mean": mean_val,
+                    "std": std_val
+                }
+            except:
+                stats = None
+
+            # Overviews
+            overviews = []
+            try:
+                for oi in range(band.GetOverviewCount()):
+                    ov = band.GetOverview(oi)
+                    overviews.append({
+                        "index": oi,
+                        "width": ov.XSize,
+                        "height": ov.YSize,
+                        "datatype": gdal.GetDataTypeName(ov.DataType)
+                    })
+            except:
+                pass
+
+            bands.append({
+                "index": idx,
+                "datatype": datatype,
+                "nodata": nodata,
+                "stats": stats,
+                "color_interpretation": color_interp,
+                "block_size": block_size,
+                "overviews": overviews,
+                "metadata": band.GetMetadata()
+            })
+
+        # --- Driver Info ---
+        driver = dataset.GetDriver()
+        driver_info = {
+            "short_name": driver.ShortName,
+            "long_name": driver.LongName
+        }
+
+        # --- GCPs ---
+        gcps = dataset.GetGCPs()
+        gcp_projection = dataset.GetGCPProjection()
+
+        # --- Final document assembly ---
         doc = {
             **file_metadata,
-            "raster_properties": {
-                "width": dataset.RasterXSize,
-                "height": dataset.RasterYSize,
-                "band_count": dataset.RasterCount,
-                "pixel_size": {
-                    "x": abs(geotransform[1]) if geotransform else None,
-                    "y": abs(geotransform[5]) if geotransform else None
-                }
+            "other": {
+                "raster_properties": {
+                    "width": dataset.RasterXSize,
+                    "height": dataset.RasterYSize,
+                    "band_count": dataset.RasterCount,
+                    "pixel_size": {
+                        "x": abs(geotransform[1]) if geotransform else None,
+                        "y": abs(geotransform[5]) if geotransform else None,
+                    },
+                },
+                "metadata": dataset.GetMetadata(),
+                "image_structure": image_structure,
+                "rpc": rpc_metadata,
+                "geolocation": geolocation,
+                "exif": exif,
+                "subdatasets": subdatasets,
+                "is_cog": is_cog,
+                "bands": bands,
+                "gcps": gcps,
+                "gcp_projection": gcp_projection,
+                "driver": driver_info,
+                "projection": {
+                    "raw_wkt": projection,
+                    "pretty_wkt": pretty_wkt,
+                    "epsg": epsg,
+                    "proj4": proj4,
+                    "authority": authority,
+                    "is_projected": is_projected,
+                    "is_geographic": is_geographic,
+                },
+                "geotransform": geotransform,
+                "extent": extent,
+                "bbox": bbox,
             },
-            "gdal_metadata": metadata
         }
 
         return doc

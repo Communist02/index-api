@@ -1,14 +1,16 @@
-import xml.etree.ElementTree as ET
 import httpx
+import xml.etree.ElementTree as ET
 import config
 
 
-def get_sts_token(token: str, endpoint: str, duration=2592000):
-    response = httpx.post(
-        f'{endpoint}/?Action=AssumeRoleWithWebIdentity&WebIdentityToken={token}&Version=2011-06-15{f"&DurationSeconds={duration}" if duration != 0 else ""}',
-        verify=not config.debug_mode,
-        timeout=5
-    )
+async def get_sts_token(token: str, endpoint: str, duration=2592000):
+    async with httpx.AsyncClient(verify=not config.debug_mode) as client:
+        response = await client.post(
+            f'{endpoint}/{f"?DurationSeconds={duration}" if duration != 0 else ""}',
+            params={'Action': 'AssumeRoleWithWebIdentity',
+                    'WebIdentityToken': token, 'Version': '2011-06-15'},
+            timeout=5
+        )
 
     if response.status_code == 200:
         xml_response = response.text
@@ -25,6 +27,7 @@ def get_sts_token(token: str, endpoint: str, duration=2592000):
         return credentials
     else:
         print('Ошибка получения STS токена:', response.status_code)
-        print(token)
-        print(response.text)
-        print(response.status_code)
+        if config.debug_mode:
+            print(token)
+            print(response.text)
+            print(response.status_code)
