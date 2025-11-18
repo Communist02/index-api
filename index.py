@@ -1,5 +1,6 @@
 import asyncio
 from datetime import UTC, datetime
+import json
 from fastapi import HTTPException
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
@@ -295,5 +296,6 @@ class IndexManager():
                 "bbox": bbox,
             },
         }
+        doc['other_text'] = json.dumps(doc['other'])
 
         return doc
