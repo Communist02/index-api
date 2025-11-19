@@ -8,9 +8,50 @@ from osgeo import gdal, osr
 import config
 from get_token import get_sts_token
 from opensearch import OpenSearchManager
+from convert import flatten_dict_with_template
 
 
 opensearch = OpenSearchManager()
+TypeList = {int: "int", float: "float", list: "list",
+            dict: "dict", str: "str", bool: "bool"}
+
+
+def OneItemIn(host, k, v, setup):
+    if v is None:
+        return "["
+    if type(v) == str and v == "":
+        return "{"
+    return str(k)+ ": " + str(v)
+
+
+def OneItemOut(host, k, v, setup):
+    if v is None:
+        return "]" + "\n"
+    if type(v) == str and v == "":
+        return "}" + "\n"
+    return ""
+
+
+def transformList(name, l, setup=None, host=None):
+    lines = [OneItemIn(host, name, "", setup)]
+    for k in l:
+        lines.append(OneItemIn(host, k, None, setup))
+        lines.append(OneItemOut(host, k, None, setup))
+    lines.append(OneItemOut(host, name, "", setup))
+    return lines
+
+
+def transformDict(name, d, setup=None, host=None):
+    lines = [OneItemIn(host, name, "", setup)]
+    for k, v in d.items():
+        if type(v) is dict:
+            lines.extend(transformDict(k, v, setup, host))
+        if type(v) is list:
+            lines.extend(transformList(k, v, setup, host))
+        lines.append(OneItemIn(host, k, v, setup))
+        lines.append(OneItemOut(host, k, v, setup))
+    lines.append(OneItemOut(host, name, "", setup))
+    return lines
 
 
 class IndexManager():
@@ -296,6 +337,10 @@ class IndexManager():
                 "bbox": bbox,
             },
         }
-        doc['other_text'] = json.dumps(doc['other'])
+        # doc['other_text'] = json.dumps(doc['other'])
+        # doc['other_text'] = "\n".join(self.dict_to_markdown(doc['other']))
+        doc['other_text'] = "\n".join(flatten_dict_with_template(doc['other']))
+        # print(self.flatten_for_search(doc['other_text']))
+        # print("\n".join(transformDict('', doc['other'])))
 
         return doc
