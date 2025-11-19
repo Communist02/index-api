@@ -8,7 +8,7 @@ from osgeo import gdal, osr
 import config
 from get_token import get_sts_token
 from opensearch import OpenSearchManager
-from convert import flatten_dict_with_template
+from convert import TreeProcessing
 
 
 opensearch = OpenSearchManager()
@@ -339,7 +339,9 @@ class IndexManager():
         }
         # doc['other_text'] = json.dumps(doc['other'])
         # doc['other_text'] = "\n".join(self.dict_to_markdown(doc['other']))
-        doc['other_text'] = "\n".join(flatten_dict_with_template(doc['other']))
+        tree_processing = TreeProcessing()
+        doc['other_text'] = "\n".join(tree_processing.dict_to_text(doc['other']))
+        print(doc['other_text'])
         # print(self.flatten_for_search(doc['other_text']))
         # print("\n".join(transformDict('', doc['other'])))
 

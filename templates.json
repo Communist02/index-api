@@ -1,0 +1,15 @@
+{
+    "default": {
+        "null": "{host}.{name} = null",
+        "int": "{host}.{name} = {value}",
+        "float": "{host}.{name} = {value}",
+        "bool": "{host}.{name} = {value}",
+        "str": "{host}.{name} = \"{value}\"",
+        "list": "{host}.{name} = {value}",
+        "in_dict": "{host}: (",
+        "out_dict": ")",
+        "in_list": "[",
+        "out_list": "]",
+        "root": "{host}."
+    }
+}
