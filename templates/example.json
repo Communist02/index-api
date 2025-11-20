@@ -1,0 +1,109 @@
+{
+    "raster_properties": {
+        "width": 512,
+        "height": 512,
+        "band_count": 0,
+        "pixel_size": {
+            "x": 1,
+            "y": 1
+        }
+    },
+    "metadata": {
+        "NC_GLOBAL#Conventions": "CF-1.0"
+    },
+    "image_structure": {},
+    "rpc": {},
+    "geolocation": {},
+    "exif": {},
+    "subdatasets": [
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":ts",
+            "[3600x1800] ts (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_c1",
+            "[3600x1800] soil_moisture_c1 (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":opt_depth_c1",
+            "[3600x1800] opt_depth_c1 (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_c2",
+            "[3600x1800] soil_moisture_c2 (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":opt_depth_c2",
+            "[3600x1800] opt_depth_c2 (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_x",
+            "[3600x1800] soil_moisture_x (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":opt_depth_x",
+            "[3600x1800] opt_depth_x (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":mask",
+            "[3600x1800] mask (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_c1_error",
+            "[3600x1800] soil_moisture_c1_error (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_c2_error",
+            "[3600x1800] soil_moisture_c2_error (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":soil_moisture_x_error",
+            "[3600x1800] soil_moisture_x_error (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":frequency_map",
+            "[3600x1800] frequency_map (16-bit integer)"
+        ],
+        [
+            "NETCDF:\"/vsimem/temp_-3281160874422842322.nc4\":scantime",
+            "[3600x1800] scantime (64-bit floating-point)"
+        ]
+    ],
+    "is_cog": false,
+    "bands": [],
+    "gcps": [],
+    "gcp_projection": "",
+    "driver": {
+        "short_name": "netCDF",
+        "long_name": "Network Common Data Format"
+    },
+    "projection": {
+        "raw_wkt": "",
+        "pretty_wkt": null,
+        "epsg": null,
+        "proj4": null,
+        "authority": null,
+        "is_projected": null,
+        "is_geographic": null
+    },
+    "geotransform": [
+        0,
+        1,
+        0,
+        0,
+        0,
+        1
+    ],
+    "extent": {
+        "minx": 0,
+        "miny": 512,
+        "maxx": 512,
+        "maxy": 0
+    },
+    "bbox": [
+        0,
+        512,
+        512,
+        0
+    ]
+}

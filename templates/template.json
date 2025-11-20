@@ -1,0 +1,16 @@
+{
+    "*": {
+        "*": "\n",
+        "null": "{name}",
+        "int": "{name} = {value}",
+        "float": "{name} = {value}",
+        "bool": "{name} = {value}",
+        "str": "{name} = \"{value}\"",
+        "in_dict": "{name}: {{",
+        "out_dict": "}}",
+        "in_list": "{name}: [",
+        "out_list": "]",
+        "in_tuple": "{name}: (",
+        "out_tuple": ")"
+    }
+}

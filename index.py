@@ -339,8 +339,9 @@ class IndexManager():
         }
         # doc['other_text'] = json.dumps(doc['other'])
         # doc['other_text'] = "\n".join(self.dict_to_markdown(doc['other']))
-        tree_processing = TreeProcessing()
-        doc['other_text'] = "\n".join(tree_processing.dict_to_text(doc['other']))
+        tree_processing = TreeProcessing('templates/template.json')
+        doc['other_text'] = "\n".join(tree_processing.convert(doc['other']))
+        print(doc['other'])
         print(doc['other_text'])
         # print(self.flatten_for_search(doc['other_text']))
         # print("\n".join(transformDict('', doc['other'])))
