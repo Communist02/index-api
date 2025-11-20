@@ -12,46 +12,6 @@ from convert import TreeProcessing
 
 
 opensearch = OpenSearchManager()
-TypeList = {int: "int", float: "float", list: "list",
-            dict: "dict", str: "str", bool: "bool"}
-
-
-def OneItemIn(host, k, v, setup):
-    if v is None:
-        return "["
-    if type(v) == str and v == "":
-        return "{"
-    return str(k)+ ": " + str(v)
-
-
-def OneItemOut(host, k, v, setup):
-    if v is None:
-        return "]" + "\n"
-    if type(v) == str and v == "":
-        return "}" + "\n"
-    return ""
-
-
-def transformList(name, l, setup=None, host=None):
-    lines = [OneItemIn(host, name, "", setup)]
-    for k in l:
-        lines.append(OneItemIn(host, k, None, setup))
-        lines.append(OneItemOut(host, k, None, setup))
-    lines.append(OneItemOut(host, name, "", setup))
-    return lines
-
-
-def transformDict(name, d, setup=None, host=None):
-    lines = [OneItemIn(host, name, "", setup)]
-    for k, v in d.items():
-        if type(v) is dict:
-            lines.extend(transformDict(k, v, setup, host))
-        if type(v) is list:
-            lines.extend(transformList(k, v, setup, host))
-        lines.append(OneItemIn(host, k, v, setup))
-        lines.append(OneItemOut(host, k, v, setup))
-    lines.append(OneItemOut(host, name, "", setup))
-    return lines
 
 
 class IndexManager():
@@ -62,7 +22,7 @@ class IndexManager():
         for path in files:
             await opensearch.search_and_delete_files(path, collection_id, collection_name)
 
-    async def get_info(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
+    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
         auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
                        auth['session_token'], secure=True, cert_check=not config.debug_mode)
@@ -95,7 +55,7 @@ class IndexManager():
                         'size': obj.size,
                     }
                     if obj.last_modified:
-                        file['updatedAt'] = obj.last_modified.isoformat()
+                        file['last_modified'] = obj.last_modified.isoformat()
                     result.append(file)
 
             for file in result:
@@ -105,7 +65,7 @@ class IndexManager():
                     'name': file['name'],
                     'size': file.get('size', 0),
                     'format': file['name'].split('.')[-1],
-                    'last_modified': file.get('last_modified', file.get('updateAt', datetime.now(UTC).timestamp()))
+                    'last_modified': file.get('last_modified', None)
                 }
 
                 document = await opensearch.get_document(
@@ -128,7 +88,7 @@ class IndexManager():
                     # Открываем через GDAL
                     dataset = gdal.Open(vsi_path)
                     if dataset is not None:
-                        data = await self.extract_metadata(dataset, file_metadata)
+                        data = await self._extract_metadata(dataset, file_metadata)
                         await opensearch.update_document(
                             f'{collection_id}{file['path']}',
                             data
@@ -161,7 +121,82 @@ class IndexManager():
                     }
                 )
 
-    async def extract_metadata(self, dataset: gdal.Dataset, file_metadata: dict):
+    async def indexing_files(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, files: list[str]) -> list[dict]:
+        auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
+        client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
+                       auth['session_token'], secure=True, cert_check=not config.debug_mode)
+        try:
+            for file in files:
+                file = await asyncio.to_thread(
+                    client.stat_object,
+                    collection_name,
+                    object_name=file,
+                    ssec=encryption_key
+                )
+                print(f'{collection_id}{file.object_name}')
+                file_metadata = {
+                    'collection_id': collection_id,
+                    'path': file.object_name,
+                    'name': file.object_name.split('/')[-1],
+                    'size': file.size,
+                    'format': file.object_name.split('.')[-1],
+                    'last_modified': file.last_modified
+                }
+
+                document = await opensearch.get_document(
+                    f'{collection_id}/{file.object_name}')
+                if document is None or document['size'] != file.size:
+                    obj = await asyncio.to_thread(
+                        client.get_object,
+                        collection_name,
+                        object_name=file.object_name,
+                        ssec=encryption_key
+                    )
+                    content = await asyncio.to_thread(obj.read)
+
+                    # Создаем виртуальный файл в памяти GDAL
+                    vsi_path = f"/vsimem/temp_{hash(file.object_name)}.{file_metadata['format']}"
+
+                    # Записываем данные в виртуальную файловую систему GDAL
+                    gdal.FileFromMemBuffer(vsi_path, content)
+
+                    # Открываем через GDAL
+                    dataset = gdal.Open(vsi_path)
+                    if dataset is not None:
+                        data = await self._extract_metadata(dataset, file_metadata)
+                        await opensearch.update_document(
+                            f'{collection_id}{file.object_name}',
+                            data
+                        )
+                    else:
+                        await opensearch.update_document(
+                            f'{collection_id}/{file.object_name}',
+                            file_metadata
+                        )
+                    gdal.Unlink(vsi_path)
+
+        except S3Error as error:
+            print(f'Error fetching files: {error.message}, {error.code}')
+            if error.code == 'NoSuchBucket':
+                raise HTTPException(
+                    status_code=410,
+                    detail=f"No such bucket '{collection_name}': {error.message}"
+                )
+            elif error.code == 'AccessDenied':
+                raise HTTPException(
+                    status_code=423,
+                    detail=f"Access Denied '{collection_name}': {error.message}"
+                )
+            else:
+                raise HTTPException(
+                    status_code=500,
+                    detail={
+                        'error': 'Failed to retrieve files',
+                        'message': error.message
+                    }
+                )
+
+    async def _extract_metadata(self, dataset: gdal.Dataset, file_metadata: dict):
         geotransform = dataset.GetGeoTransform()
         projection = dataset.GetProjection()
 
