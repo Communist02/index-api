@@ -170,7 +170,7 @@ class IndexManager():
                         )
                     else:
                         await opensearch.update_document(
-                            f'{collection_id}/{file.object_name}',
+                            f'{collection_id}{file.object_name}',
                             file_metadata
                         )
                     gdal.Unlink(vsi_path)

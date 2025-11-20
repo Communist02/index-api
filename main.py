@@ -25,6 +25,7 @@ class indexingCollectionRequest(BaseModel):
     collection_name: str
     jwt_token: str
     encryption_key: str
+    path: str | None
 
 
 class indexingFilesRequest(BaseModel):
@@ -46,7 +47,7 @@ async def indexing_collection(request: indexingCollectionRequest):
     encryption_key = base64.urlsafe_b64decode(request.encryption_key.encode())
     encryption_key = SseCustomerKey(encryption_key)
     await index.indexing_collection(request.collection_id, request.collection_name,
-                        jwt_token=request.jwt_token, encryption_key=encryption_key)
+                        jwt_token=request.jwt_token, encryption_key=encryption_key, path=request.path)
 
 
 @app.post("/indexing_files")
@@ -60,4 +61,3 @@ async def indexing_files(request: indexingFilesRequest):
 @app.post("/delete_files")
 async def delete_files(request: DeleteRequest):
     await index.delete_files(request.collection_id, request.collection_name, request.files)
-
