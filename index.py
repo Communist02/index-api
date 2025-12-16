@@ -1,6 +1,4 @@
 import asyncio
-from datetime import UTC, datetime
-import json
 from fastapi import HTTPException
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
@@ -20,7 +18,7 @@ class IndexManager():
 
     async def delete_files(self, collection_id: int, collection_name: str, files: list[str]):
         for path in files:
-            await opensearch.search_and_delete_files(path, collection_id, collection_name)
+            await opensearch.search_and_delete_files(path, collection_id)
 
     async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
         auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)

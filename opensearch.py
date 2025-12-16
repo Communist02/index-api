@@ -1,10 +1,9 @@
 from opensearchpy import NotFoundError, AsyncOpenSearch
-
 import config
 
 # auth = ('admin', os.getenv('OPENSEARCH_PASS'))
 # For testing only. Don't store credentials in code.
-auth = ('admin', 'OTFiZDkwMGRiOWQw1!')
+auth = (config.opensearch_user, config.opensearch_password)
 
 
 class OpenSearchManager:

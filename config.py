@@ -5,3 +5,5 @@ open_search_files_index = 'collections-files'
 access_key = 'admin'
 secret_key = 'password'
 debug_mode = True
+opensearch_user = "admin"
+opensearch_password = "OTFiZDkwMGRiOWQw1!"
