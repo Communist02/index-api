@@ -1,5 +1,4 @@
 fastapi[standard]
 numpy
-gdal==3.11.4
 opensearch-py[async]
 minio
