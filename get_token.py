@@ -1,9 +1,9 @@
 import httpx
 import xml.etree.ElementTree as ET
-import config
+from config import config
 
 
-async def get_sts_token(token: str, endpoint: str, duration=2592000):
+async def get_sts_token(token: str, endpoint: str, duration=2592000) -> dict | None:
     async with httpx.AsyncClient(verify=not config.debug_mode) as client:
         response = await client.post(
             f'{endpoint}/{f"?DurationSeconds={duration}" if duration != 0 else ""}',
@@ -22,9 +22,13 @@ async def get_sts_token(token: str, endpoint: str, duration=2592000):
             './/{https://sts.amazonaws.com/doc/2011-06-15/}SecretAccessKey')
         session_token = root.find(
             './/{https://sts.amazonaws.com/doc/2011-06-15/}SessionToken')
-        credentials = {'access_key': access_key.text,
-                       'secret_key': secret_key.text, 'session_token': session_token.text}
-        return credentials
+        if access_key is not None and secret_key is not None and session_token is not None:
+            credentials = {
+                'access_key': access_key.text,
+                'secret_key': secret_key.text,
+                'session_token': session_token.text,
+            }
+            return credentials
     else:
         print('Ошибка получения STS токена:', response.status_code)
         if config.debug_mode:

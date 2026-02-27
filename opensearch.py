@@ -1,5 +1,5 @@
 from opensearchpy import NotFoundError, AsyncOpenSearch
-import config
+from config import config
 
 # auth = ('admin', os.getenv('OPENSEARCH_PASS'))
 # For testing only. Don't store credentials in code.
@@ -7,13 +7,13 @@ auth = (config.opensearch_user, config.opensearch_password)
 
 
 class OpenSearchManager:
-    def __init__(self, host: str = config.open_search_host, port: int = config.open_search_port, auth: tuple = auth):
+    def __init__(self, host: str = config.opensearch_host, port: int = config.opensearch_port, auth: tuple = auth):
         self.host = host
         self.port = port
         self.auth = auth
 
     # Не работает
-    async def create_index(self, index_name: str = config.open_search_files_index):
+    async def create_index(self, index_name: str = config.opensearch_files_index):
         async with AsyncOpenSearch(
             hosts=[{'host': self.host, 'port': self.port}],
             http_compress=True,
@@ -26,7 +26,7 @@ class OpenSearchManager:
             response = await client.indices.create(
                 index=index_name)
 
-    async def update_document(self, doc_id: int | str, document: dict, index_name: str = config.open_search_files_index):
+    async def update_document(self, doc_id: int | str, document: dict, index_name: str = config.opensearch_files_index):
         async with AsyncOpenSearch(
             hosts=[{'host': self.host, 'port': self.port}],
             http_compress=True,
@@ -43,7 +43,7 @@ class OpenSearchManager:
                 refresh=True,
             )
 
-    async def delete_document(self, doc_id: int | str, index_name: str = config.open_search_files_index):
+    async def delete_document(self, doc_id: int | str, index_name: str = config.opensearch_files_index):
         async with AsyncOpenSearch(
             hosts=[{'host': self.host, 'port': self.port}],
             http_compress=True,
@@ -58,7 +58,7 @@ class OpenSearchManager:
                 id=doc_id,
             )
 
-    async def search_and_delete_files(self, path: str, collection_id: int, collection_name: str, index_name: str = config.open_search_files_index):
+    async def search_and_delete_files(self, path: str, collection_id: int, collection_name: str = '', index_name: str = config.opensearch_files_index):
         path = path.strip('/')
         # path = path.replace('/', '\/')
         print(f'path: /{path}')
@@ -92,7 +92,7 @@ class OpenSearchManager:
             )
         print(response)
 
-    async def get_document(self, doc_id: int | str, index_name: str = config.open_search_files_index) -> dict | None:
+    async def get_document(self, doc_id: int | str, index_name: str = config.opensearch_files_index) -> dict | None:
         async with AsyncOpenSearch(
             hosts=[{'host': self.host, 'port': self.port}],
             http_compress=True,

@@ -3,7 +3,7 @@ from fastapi import HTTPException
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
 from osgeo import gdal, osr
-import config
+from config import config
 from get_token import get_sts_token
 from opensearch import OpenSearchManager
 from convert import TreeProcessing
@@ -13,15 +13,23 @@ opensearch = OpenSearchManager()
 
 
 class IndexManager():
-    def __init__(self, endpoint_minio: str = config.minio_url):
+    def __init__(self, endpoint_minio: str = config.s3_url):
         self.endpoint_minio = endpoint_minio
 
     async def delete_files(self, collection_id: int, collection_name: str, files: list[str]):
         for path in files:
             await opensearch.search_and_delete_files(path, collection_id)
 
-    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True) -> list[dict]:
-        auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
+    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str | None = '', recursive: bool = True) -> list[dict]:
+        auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
+        if auth is None:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    'error': 'Error receiving the STS token',
+                    'message': "Couldn't get the STS token"
+                }
+            )
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
                        auth['session_token'], secure=True, cert_check=not config.debug_mode)
 
@@ -120,7 +128,15 @@ class IndexManager():
                 )
 
     async def indexing_files(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, files: list[str]) -> list[dict]:
-        auth = await get_sts_token(jwt_token, 'https://' + config.minio_url, 0)
+        auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
+        if auth is None:
+            raise HTTPException(
+                status_code=500,
+                detail={
+                    'error': 'Error receiving the STS token',
+                    'message': "Couldn't get the STS token"
+                }
+            )
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
                        auth['session_token'], secure=True, cert_check=not config.debug_mode)
         try:
