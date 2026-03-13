@@ -20,7 +20,7 @@ class IndexManager():
         for path in files:
             await opensearch.search_and_delete_files(path, collection_id)
 
-    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str | None = '', recursive: bool = True) -> list[dict]:
+    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str | None = '', recursive: bool = True):
         auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
         if auth is None:
             raise HTTPException(
@@ -52,10 +52,18 @@ class IndexManager():
 
             for obj in objects:
                 object_name = obj.object_name
+                if object_name is None:
+                    raise HTTPException(
+                        status_code=500,
+                        detail={
+                            'error': 'Failed to retrieve files',
+                            'message': f'File name not received'
+                        }
+                    )
                 if not object_name.endswith('NODATA') and not obj.is_dir:
                     file = {
                         'collection_id': collection_id,
-                        'name': obj.object_name[obj.object_name.rfind('/', 0, -1 if obj.is_dir else -2) + 1:],
+                        'name': object_name[object_name.rfind('/', 0, -1 if obj.is_dir else -2) + 1:],
                         'isDirectory': obj.is_dir,
                         'path': f'/{object_name}',
                         'size': obj.size,
@@ -127,7 +135,7 @@ class IndexManager():
                     }
                 )
 
-    async def indexing_files(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, files: list[str]) -> list[dict]:
+    async def indexing_files(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, files: list[str]) -> None:
         auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
         if auth is None:
             raise HTTPException(
@@ -147,29 +155,39 @@ class IndexManager():
                     object_name=file,
                     ssec=encryption_key
                 )
-                print(f'{collection_id}{file.object_name}')
+                if file.object_name:
+                    path = '/' + file.object_name
+                else:
+                    raise HTTPException(
+                        status_code=500,
+                        detail={
+                            'error': 'Failed to retrieve files',
+                            'message': f'File name not received "{file}"'
+                        }
+                    )
+                print(f'{collection_id}{path}')
                 file_metadata = {
                     'collection_id': collection_id,
-                    'path': file.object_name,
-                    'name': file.object_name.split('/')[-1],
+                    'path': path,
+                    'name': path.split('/')[-1],
                     'size': file.size,
-                    'format': file.object_name.split('.')[-1],
+                    'format': path.split('.')[-1],
                     'last_modified': file.last_modified
                 }
 
                 document = await opensearch.get_document(
-                    f'{collection_id}/{file.object_name}')
+                    f'{collection_id}{path}')
                 if document is None or document['size'] != file.size:
                     obj = await asyncio.to_thread(
                         client.get_object,
                         collection_name,
-                        object_name=file.object_name,
+                        object_name=path,
                         ssec=encryption_key
                     )
                     content = await asyncio.to_thread(obj.read)
 
                     # Создаем виртуальный файл в памяти GDAL
-                    vsi_path = f"/vsimem/temp_{hash(file.object_name)}.{file_metadata['format']}"
+                    vsi_path = f"/vsimem/temp_{hash(path)}.{file_metadata['format']}"
 
                     # Записываем данные в виртуальную файловую систему GDAL
                     gdal.FileFromMemBuffer(vsi_path, content)
@@ -179,12 +197,12 @@ class IndexManager():
                     if dataset is not None:
                         data = await self._extract_metadata(dataset, file_metadata)
                         await opensearch.update_document(
-                            f'{collection_id}{file.object_name}',
+                            f'{collection_id}{path}',
                             data
                         )
                     else:
                         await opensearch.update_document(
-                            f'{collection_id}{file.object_name}',
+                            f'{collection_id}{path}',
                             file_metadata
                         )
                     gdal.Unlink(vsi_path)
