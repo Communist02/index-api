@@ -156,7 +156,7 @@ class IndexManager():
                     ssec=encryption_key
                 )
                 if file.object_name:
-                    path = '/' + file.object_name
+                    path = '/' + file.object_name.strip('/')
                 else:
                     raise HTTPException(
                         status_code=500,
