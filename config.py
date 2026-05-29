@@ -2,6 +2,7 @@ import json
 import os
 from typing import Any
 
+config_path = os.path.expanduser('~/index-api.json')
 
 required_fields = [
     'debug_mode'
@@ -29,20 +30,23 @@ default_config = {
 
 
 class Config:
-    def __init__(self, config_path=os.path.expanduser('~/storage_api_config.json')):
+    def __init__(self, config_path=config_path):
         try:
-            with open(config_path, 'r') as f:
-                self.config = json.load(f)
+            with open(config_path, 'r') as file:
+                self.config = json.load(file)
                 print(f"Config loaded from: {config_path}")
                 self._validate_required_fields()
         except FileNotFoundError:
-            print(f"Config file not found at {config_path}")
+            print(f"Config file not found at {config_path}, created new file")
+            with open(config_path, 'w') as file:
+                file.write(json.dumps(default_config, indent=4))
+
             self.config = default_config
         except json.JSONDecodeError as e:
             print(f"Invalid JSON in config file at {config_path}: {e}")
             self.config = default_config
 
-    def validate_required_fields(self):
+    def _validate_required_fields(self):
         """Проверяет наличие всех обязательных полей"""
         missing_fields = []
 
@@ -51,10 +55,7 @@ class Config:
                 missing_fields.append(field)
 
         if missing_fields:
-            print(
-                f"Missing required fields: {', '.join(missing_fields)}")
-        else:
-            print("All required fields are present")
+            print(f"Missing required fields from config: {', '.join(missing_fields)}")
 
     def __getattr__(self, name: str) -> Any:
         return self.config.get(name)
