@@ -4,18 +4,6 @@ from typing import Any
 
 config_path = os.path.expanduser('~/index-api.json')
 
-required_fields = [
-    'debug_mode'
-    's3_url',
-    'opensearch_host',
-    'opensearch_port',
-    'opensearch_user',
-    'opensearch_password',
-    'opensearch_files_index',
-    's3_access_key',
-    's3_secret_key'
-]
-
 default_config = {
     's3_url': "localhost:9000",
     'debug_mode': True,
@@ -47,15 +35,29 @@ class Config:
             self.config = default_config
 
     def _validate_required_fields(self):
-        """Проверяет наличие всех обязательных полей"""
+        """Проверяет наличие всех обязательных полей и добавляет недостающие"""
         missing_fields = []
+        config_updated = False
 
-        for field in required_fields:
+        for field, default_value in default_config.items():
             if field not in self.config or self.config.get(field) is None:
                 missing_fields.append(field)
+                # Добавляем недостающее поле с значением по умолчанию
+                self.config[field] = default_value
+                config_updated = True
 
         if missing_fields:
             print(f"Missing required fields from config: {', '.join(missing_fields)}")
+            print(f"Added missing fields with default values")
+            
+        # Если конфиг был обновлен, сохраняем его в файл
+        if config_updated:
+            try:
+                with open(config_path, 'w') as file:
+                    json.dump(self.config, file, indent=4)
+                print(f"Config file updated with missing fields at: {config_path}")
+            except Exception as e:
+                print(f"Warning: Could not save updated config to file: {e}")
 
     def __getattr__(self, name: str) -> Any:
         return self.config.get(name)

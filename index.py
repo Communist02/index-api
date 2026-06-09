@@ -48,7 +48,7 @@ class IndexManager():
                     collection_name,
                     recursive=recursive
                 )
-            result = []
+            files = []
 
             for obj in objects:
                 object_name = obj.object_name
@@ -60,60 +60,10 @@ class IndexManager():
                             'message': f'File name not received'
                         }
                     )
-                if not object_name.endswith('NODATA') and not obj.is_dir:
-                    file = {
-                        'collection_id': collection_id,
-                        'name': object_name[object_name.rfind('/', 0, -1 if obj.is_dir else -2) + 1:],
-                        'isDirectory': obj.is_dir,
-                        'path': f'/{object_name}',
-                        'size': obj.size,
-                    }
-                    if obj.last_modified:
-                        file['last_modified'] = obj.last_modified.isoformat()
-                    result.append(file)
+                if not object_name.endswith('/') and not obj.is_dir:
+                    files.append(object_name)
 
-            for file in result:
-                file_metadata = {
-                    'collection_id': collection_id,
-                    'path': file['path'],
-                    'name': file['name'],
-                    'size': file.get('size', 0),
-                    'format': file['name'].split('.')[-1],
-                    'last_modified': file.get('last_modified', None)
-                }
-
-                document = await opensearch.get_document(
-                    f'{collection_id}{file['path']}')
-                if document is None or document['size'] != file['size']:
-                    obj = await asyncio.to_thread(
-                        client.get_object,
-                        collection_name,
-                        object_name=file['path'],
-                        ssec=encryption_key
-                    )
-                    content = await asyncio.to_thread(obj.read)
-
-                    # Создаем виртуальный файл в памяти GDAL
-                    vsi_path = f"/vsimem/temp_{hash(file['path'])}.{file_metadata['format']}"
-
-                    # Записываем данные в виртуальную файловую систему GDAL
-                    gdal.FileFromMemBuffer(vsi_path, content)
-
-                    # Открываем через GDAL
-                    dataset = gdal.Open(vsi_path)
-                    if dataset is not None:
-                        data = await self._extract_metadata(dataset, file_metadata)
-                        await opensearch.update_document(
-                            f'{collection_id}{file['path']}',
-                            data
-                        )
-                    else:
-                        await opensearch.update_document(
-                            f'{collection_id}{file['path']}',
-                            file_metadata
-                        )
-                    gdal.Unlink(vsi_path)
-
+            return await self.indexing_files(collection_id, collection_name, jwt_token, encryption_key, files)
         except S3Error as error:
             print(f'Error fetching files: {error.message}, {error.code}')
             if error.code == 'NoSuchBucket':
@@ -156,7 +106,9 @@ class IndexManager():
                     ssec=encryption_key
                 )
                 if file.object_name:
-                    path = '/' + file.object_name.strip('/')
+                    if not file.object_name.endswith('/'):
+                        continue
+                    path = '/' + file.object_name.lstrip('/')
                 else:
                     raise HTTPException(
                         status_code=500,
