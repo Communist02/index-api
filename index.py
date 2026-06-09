@@ -1,12 +1,15 @@
 import asyncio
+import ssl
 from fastapi import HTTPException
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
+import urllib3
 from osgeo import gdal, osr
 from config import config
 from get_token import get_sts_token
 from opensearch import OpenSearchManager
 from convert import TreeProcessing
+import truststore
 
 
 opensearch = OpenSearchManager()
@@ -15,12 +18,15 @@ opensearch = OpenSearchManager()
 class IndexManager():
     def __init__(self, endpoint_minio: str = config.s3_url):
         self.endpoint_minio = endpoint_minio
+        ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        self.http_client = urllib3.PoolManager(
+            ssl_context=ssl_context) if not config.debug_mode else None
 
     async def delete_files(self, collection_id: int, collection_name: str, files: list[str]):
         for path in files:
             await opensearch.search_and_delete_files(path, collection_id)
 
-    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str | None = '', recursive: bool = True):
+    async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True):
         auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
         if auth is None:
             raise HTTPException(
@@ -31,8 +37,9 @@ class IndexManager():
                 }
             )
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
-                       auth['session_token'], secure=True, cert_check=not config.debug_mode)
+                       auth['session_token'], secure=True, cert_check=not config.debug_mode, http_client=self.http_client)
 
+        path = path.strip('/')
         try:
             if path:
                 prefix = path.strip('/') + '/'
@@ -96,7 +103,7 @@ class IndexManager():
                 }
             )
         client = Minio(self.endpoint_minio, auth['access_key'], auth['secret_key'],
-                       auth['session_token'], secure=True, cert_check=not config.debug_mode)
+                       auth['session_token'], secure=True, cert_check=not config.debug_mode, http_client=self.http_client)
         try:
             for file in files:
                 file = await asyncio.to_thread(
@@ -106,7 +113,7 @@ class IndexManager():
                     ssec=encryption_key
                 )
                 if file.object_name:
-                    if not file.object_name.endswith('/'):
+                    if file.object_name.endswith('/'):
                         continue
                     path = '/' + file.object_name.lstrip('/')
                 else:

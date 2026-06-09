@@ -25,7 +25,7 @@ class indexingCollectionRequest(BaseModel):
     collection_name: str
     jwt_token: str
     encryption_key: str
-    path: str | None
+    path: str = ''
 
 
 class indexingFilesRequest(BaseModel):
