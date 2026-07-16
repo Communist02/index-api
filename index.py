@@ -1,6 +1,7 @@
 import asyncio
 import ssl
 from fastapi import HTTPException
+from fastapi.concurrency import run_in_threadpool
 from minio import Minio, S3Error
 from minio.sse import SseCustomerKey
 import urllib3
@@ -12,11 +13,9 @@ from convert import TreeProcessing
 import truststore
 
 
-opensearch = OpenSearchManager()
-
-
 class IndexManager():
     def __init__(self, endpoint_minio: str = config.s3_url):
+        self.opensearch = OpenSearchManager()
         self.endpoint_minio = endpoint_minio
         ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         self.http_client = urllib3.PoolManager(
@@ -24,7 +23,7 @@ class IndexManager():
 
     async def delete_files(self, collection_id: int, collection_name: str, files: list[str]):
         for path in files:
-            await opensearch.search_and_delete_files(path, collection_id)
+            await self.opensearch.search_and_delete_files(path, collection_id)
 
     async def indexing_collection(self, collection_id: int, collection_name: str, jwt_token: str, encryption_key: SseCustomerKey, path: str = '', recursive: bool = True):
         auth = await get_sts_token(jwt_token, 'https://' + config.s3_url, 0)
@@ -127,6 +126,7 @@ class IndexManager():
                 print(f'{collection_id}{path}')
                 file_metadata = {
                     'collection_id': collection_id,
+                    'collection_name': collection_name,
                     'path': path,
                     'name': path.split('/')[-1],
                     'size': file.size,
@@ -134,7 +134,7 @@ class IndexManager():
                     'last_modified': file.last_modified
                 }
 
-                document = await opensearch.get_document(
+                document = await self.opensearch.get_document(
                     f'{collection_id}{path}')
                 if document is None or document['size'] != file.size:
                     obj = await asyncio.to_thread(
@@ -155,12 +155,12 @@ class IndexManager():
                     dataset = gdal.Open(vsi_path)
                     if dataset is not None:
                         data = await self._extract_metadata(dataset, file_metadata)
-                        await opensearch.update_document(
+                        await self.opensearch.update_document(
                             f'{collection_id}{path}',
                             data
                         )
                     else:
-                        await opensearch.update_document(
+                        await self.opensearch.update_document(
                             f'{collection_id}{path}',
                             file_metadata
                         )
@@ -373,3 +373,16 @@ class IndexManager():
         # print("\n".join(transformDict('', doc['other'])))
 
         return doc
+
+    async def get_status(self) -> dict:
+        status = {'type': 'storage', 'name': 'minio', 'host': config.s3_url.split(
+            ':')[0], 'port': config.s3_url.split(':')[-1]}
+        try:
+            client = Minio(self.endpoint_minio, secure=True,
+                           cert_check=not config.debug_mode, http_client=self.http_client)
+            await run_in_threadpool(client.list_buckets)
+            return status | {'status': 'active', 'detail': 'S3 service is active and reachable'}
+        except S3Error as error:
+            return status | {'status': 'failed', 'detail': f'Failed to get status: {error.message} | {error.code}'}
+        except urllib3.exceptions.MaxRetryError as error:
+            return status | {'status': 'inactive', 'detail': f'Failed to get status: {error}'}

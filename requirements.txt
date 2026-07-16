@@ -1,5 +1,4 @@
 fastapi[standard]
-numpy
 opensearch-py[async]
 minio
 truststore

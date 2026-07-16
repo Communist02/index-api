@@ -11,9 +11,7 @@ default_config = {
     'opensearch_port': 9200,
     'opensearch_user': "admin",
     'opensearch_password': "OTFiZDkwMGRiOWQw1!",
-    'opensearch_files_index': "collections-files",
-    's3_access_key': "admin",
-    's3_secret_key': "password"
+    'opensearch_files_index': "collections-files"
 }
 
 

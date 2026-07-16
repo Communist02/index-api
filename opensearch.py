@@ -1,8 +1,6 @@
 from opensearchpy import NotFoundError, AsyncOpenSearch
 from config import config
 
-# auth = ('admin', os.getenv('OPENSEARCH_PASS'))
-# For testing only. Don't store credentials in code.
 auth = (config.opensearch_user, config.opensearch_password)
 
 
@@ -110,3 +108,20 @@ class OpenSearchManager:
                 return response['_source']
             except NotFoundError:
                 return None
+            
+    async def get_s3_status(self) -> dict:
+        status = {'type': 'database', 'name': 'opensearch', 'host': self.host, 'port': self.port}
+        try:
+            async with AsyncOpenSearch(
+                hosts=[{'host': self.host, 'port': self.port}],
+                http_compress=True,
+                http_auth=auth,
+                use_ssl=True,
+                verify_certs=not config.debug_mode,
+                ssl_assert_hostname=not config.debug_mode,
+                ssl_show_warn=not config.debug_mode,
+            ) as client:
+                await client.info()
+            return status | {'status': 'active','detail': 'OpenSearch service is active and reachable'}
+        except Exception as e:
+            return status | {'status': 'failed', 'detail': f'Failed to get status: {str(e)}'}
