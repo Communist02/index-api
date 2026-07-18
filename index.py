@@ -14,7 +14,7 @@ import truststore
 
 
 class IndexManager():
-    def __init__(self, endpoint_minio: str = config.s3_url):
+    def __init__(self, endpoint_minio: str = f'{config.s3_host}:{config.s3_port}'):
         self.opensearch = OpenSearchManager()
         self.endpoint_minio = endpoint_minio
         ssl_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
@@ -374,15 +374,18 @@ class IndexManager():
 
         return doc
 
-    async def get_status(self) -> dict:
-        status = {'type': 'storage', 'name': 'minio', 'host': config.s3_url.split(
-            ':')[0], 'port': config.s3_url.split(':')[-1]}
+    async def get_s3_status(self) -> dict:
+        status = {'type': 'storage', 'name': 'minio',
+                  'host': config.s3_host, 'port': config.s3_port}
         try:
             client = Minio(self.endpoint_minio, secure=True,
                            cert_check=not config.debug_mode, http_client=self.http_client)
             await run_in_threadpool(client.list_buckets)
             return status | {'status': 'active', 'detail': 'S3 service is active and reachable'}
         except S3Error as error:
-            return status | {'status': 'failed', 'detail': f'Failed to get status: {error.message} | {error.code}'}
+            if error.code == 'AccessDenied':
+                return status | {'status': 'active', 'detail': 'S3 service is active and reachable'}
+            else:
+                return status | {'status': 'failed', 'detail': f'Failed to get status: {error.message} | {error.code}'}
         except urllib3.exceptions.MaxRetryError as error:
             return status | {'status': 'inactive', 'detail': f'Failed to get status: {error}'}

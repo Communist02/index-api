@@ -109,7 +109,7 @@ class OpenSearchManager:
             except NotFoundError:
                 return None
             
-    async def get_s3_status(self) -> dict:
+    async def get_status(self) -> dict:
         status = {'type': 'database', 'name': 'opensearch', 'host': self.host, 'port': self.port}
         try:
             async with AsyncOpenSearch(

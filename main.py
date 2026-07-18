@@ -50,17 +50,16 @@ async def redirect_to_docs() -> RedirectResponse:
 
 
 @app.get("/status")
-async def get_status() -> dict[str, str | int | bool | list[dict]]:
+async def get_status() -> dict[str, str | list[dict] | dict[str, str]]:
     status = {
         'status': 'active',  # active, inactive, failed
         'type': 'api',
         'urls': {
-            'Документация': '/docs',
             'Репозиторий': 'http://git.eco.dvo.ru:3000/mazur/index-api'
         },
         'agents': list(await asyncio.gather(
-            index.opensearch.get_s3_status(),
-            index.get_status()
+            index.opensearch.get_status(),
+            index.get_s3_status()
         ))
     }
     return status

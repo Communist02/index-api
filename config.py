@@ -5,7 +5,8 @@ from typing import Any
 config_path = os.path.expanduser('~/index-api.json')
 
 default_config = {
-    's3_url': "localhost:9000",
+    's3_host': "localhost",
+    's3_port': 9000,
     'debug_mode': True,
     'opensearch_host': "elastic-1.eco.dvo.ru",
     'opensearch_port': 9200,
